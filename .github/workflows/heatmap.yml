@@ -1,0 +1,24 @@
+name: update-heatmap
+on:
+  schedule:
+    - cron:  '25 0 * * *'   # 00:25 UTC daily
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: pip install pandas matplotlib seaborn
+      - name: Generate heat-map
+        run: python generate_heatmap.py
+      - name: Commit & push
+        run: |
+          git config --global user.email "bot@users.noreply.github.com"
+          git config --global user.name  "Heatmap Bot"
+          git add site/heatmap.png
+          git commit -m "auto: update heatmap" || echo "no changes"
+          git push
+      - name: Deploy to Pages
+        uses: actions/deploy-pages@v4
