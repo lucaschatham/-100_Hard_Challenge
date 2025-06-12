@@ -55,34 +55,35 @@ h1{font-size:20px;font-weight:600;margin-bottom:16px;display:flex;align-items:ce
 
 <script>
 /* ───── 2.  CONSTANTS ─────────────────────────────────────────────────────── */
-const DATA_URL='https://gist.githubusercontent.com/lucaschatham/ca0dda9d6b6d7497a1b03e17d6b72524/raw/streaks_data.json';
-const PT='America/Los_Angeles';
-const maps=document.getElementById('maps');
-let weekView=false;
+const DATA_URL = "./data/streaks_data.json";   /* ← local file */
+const PT       = "America/Los_Angeles";
+const maps     = document.getElementById('maps');
+let weekView   = false;
 
-/* ───── 3. UTILS ──────────────────────────────────────────────────────────── */
-const toPST=d=>{
-  const [Y,M,D]=d.split('-');
-  const noonUTC=Date.UTC(+Y,+M-1,+D,12);
-  const pstDate=new Date(new Intl.DateTimeFormat('en-US',{timeZone:PT}).format(noonUTC));
+/* ───── 3.  UTILS ─────────────────────────────────────────────────────────── */
+const toPST = d => {
+  const [Y,M,D] = d.split("-");
+  const noonUTC = Date.UTC(+Y,+M-1,+D,12);
+  const pstDate = new Date(new Intl.DateTimeFormat("en-US",{timeZone:PT}).format(noonUTC));
   pstDate.setHours(0,0,0,0);
   return pstDate.toISOString().slice(0,10);
 };
-const thisYear=(new Date()).toISOString().slice(0,4);
-const dayIndex=(dateStr)=>{
-  const d=new Date(dateStr); const start=new Date(d.getFullYear(),0,1);
-  const diff=(d-start)/(1000*60*60*24);
-  return diff;                           // 0-based index into 365/366 array
+const thisYear = (new Date()).toISOString().slice(0,4);
+const dayIndex = dateStr => {
+  const d = new Date(dateStr);
+  const start = new Date(d.getFullYear(),0,1);
+  return (d - start)/(1000*60*60*24);          // 0-based index
 };
 
-/* ───── 4. RENDER ─────────────────────────────────────────────────────────── */
+/* ───── 4.  RENDER ────────────────────────────────────────────────────────── */
 function render(db){
   maps.textContent='';
   for(const [habit,dates] of Object.entries(db)){
     const sec=document.createElement('section'); sec.className='habit';
     const streakLen=computeStreak(dates);
-    const pct=Math.round((dates.filter(d=>d.startsWith(thisYear)).length/
-               ( (new Date()).getDay()+1))*100)||0;
+    const pct=Math.round(
+      (dates.filter(d=>d.startsWith(thisYear)).length / ((new Date()).getDay()+1))*100
+    ) || 0;
     sec.innerHTML=`<h3>${habit}<small>🔥 ${streakLen} | ${pct}%</small></h3>`;
     const grid=document.createElement('div'); grid.className='grid';
     const total=isLeap(+thisYear)?366:365;
@@ -98,36 +99,37 @@ function render(db){
 }
 function computeStreak(arr){
   const set=new Set(arr); let streak=0;
-  for(let d=new Date();;d.setDate(d.getDate()-1)){
+  for(let d=new Date(); ; d.setDate(d.getDate()-1)){
     const iso=d.toISOString().slice(0,10);
     if(set.has(iso)) streak++; else break;
   }
   return streak;
 }
-function isLeap(y){return (y%4===0&&y%100!==0)||y%400===0}
+const isLeap = y => (y%4===0 && y%100!==0) || y%400===0;
 
-/* ───── 5. FETCH & INITIAL DRAW ───────────────────────────────────────────── */
-fetch(DATA_URL,{headers:{'Cache-Control':'max-age=0'}})
+/* ───── 5.  FETCH & INITIAL DRAW ──────────────────────────────────────────── */
+fetch(DATA_URL, {headers:{'Cache-Control':'max-age=0'}})
   .then(r=>r.json())
   .then(raw=>{
      const fixed={};
      for(const [h,arr] of Object.entries(raw)){
        fixed[h]=[...new Set(arr.map(toPST))];
      }
-     window._db=fixed;                 // stash for toggles
+     window._db=fixed;
      render(fixed);
   })
   .catch(e=>{maps.textContent='⚠️ '+e});
 
 /* ───── 6.  INTERACTIONS  ─────────────────────────────────────────────────── */
-document.getElementById('themeBtn').onclick=()=>{
+document.getElementById('themeBtn').onclick = () => {
   document.body.classList.toggle('dark');
-  themeBtn.textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+  themeBtn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
 };
-document.getElementById('rangeBtn').onclick=()=>{
-  weekView=!weekView;
-  rangeBtn.textContent=weekView?'📅 Year':'📅 Week';
+document.getElementById('rangeBtn').onclick = () => {
+  weekView = !weekView;
+  rangeBtn.textContent = weekView ? '📅 Year' : '📅 Week';
   render(window._db);
 };
 </script>
 </body>
+</html>
