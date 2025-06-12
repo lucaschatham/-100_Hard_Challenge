@@ -1,0 +1,16 @@
+<!DOCTYPE html><meta charset=utf-8>
+<h1>🏆 100-Hard Challenge — Habit Heat-map</h1>
+<pre id="out">Loading…</pre>
+<script>
+const DATA_URL =
+  'https://gist.githubusercontent.com/lucaschatham/ca0dda9d6b6d7497a1b03e17d6b72524/raw/streaks_data.json';
+
+/* ------- super-tiny render just to prove it works -------- */
+fetch(DATA_URL)
+  .then(r => r.json())
+  .then(js => {
+    document.getElementById('out').textContent =
+      JSON.stringify(js, null, 2);
+  })
+  .catch(e => { document.getElementById('out').textContent = e });
+</script>
