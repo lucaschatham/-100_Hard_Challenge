@@ -1,16 +1,71 @@
-<!DOCTYPE html><meta charset=utf-8>
+<!DOCTYPE html><meta charset="utf-8">
+<title>🏆 100-Hard Challenge — Heat-map</title>
+<style>
+  body{font-family:system-ui,Helvetica,Arial,sans-serif;padding:2rem}
+  h1{margin-top:0}
+  .day{shape-rendering:crispEdges;cursor:pointer}
+  .day:hover{stroke:#000;stroke-width:.5}
+  .tooltip{
+    position:fixed;pointer-events:none;background:#333;color:#fff;
+    padding:.25rem .5rem;border-radius:.25rem;font-size:.8rem;opacity:0;
+    transition:opacity .15s
+  }
+</style>
 <h1>🏆 100-Hard Challenge — Habit Heat-map</h1>
-<pre id="out">Loading…</pre>
-<script>
+<svg id=chart width=740 height=110></svg>
+<div id=tip class=tooltip></div>
+<script type=module>
+import {scaleQuantize,select,utcSunday,utcDays,timeFormat} 
+  from 'https://cdn.skypack.dev/d3@7';
+
 const DATA_URL =
   'https://gist.githubusercontent.com/lucaschatham/ca0dda9d6b6d7497a1b03e17d6b72524/raw/streaks_data.json';
 
-/* ------- super-tiny render just to prove it works -------- */
-fetch(DATA_URL)
-  .then(r => r.json())
-  .then(js => {
-    document.getElementById('out').textContent =
-      JSON.stringify(js, null, 2);
-  })
-  .catch(e => { document.getElementById('out').textContent = e });
+const svg   = select('#chart'),
+      tip   = select('#tip'),
+      year  = new Date().getUTCFullYear(),
+      start = utcSunday.floor(new Date(Date.UTC(year,0,1))),
+      days  = utcDays(start, new Date(Date.UTC(year+1,0,1)));
+
+const cell   = 12,     // square size
+      padX   = 20,
+      padY   = 20;
+
+svg.attr('viewBox',[0,0, padX+53*cell, padY+7*cell]);
+
+// 1. fetch data -------------------------------------------------------------
+const raw = await fetch(DATA_URL).then(r=>r.json());
+// flatten into {"YYYY-MM-DD": count, ...}
+const counts = {};
+for(const [habit,dates] of Object.entries(raw)){
+  for(const d of dates) counts[d] = (counts[d]||0)+1;
+}
+
+// 2. colour scale -----------------------------------------------------------
+const max   = Math.max(1, ...Object.values(counts));
+const color = scaleQuantize()
+  .domain([0,max])
+  .range(['#eef2f3','#c7e9c0','#7fc97f','#41ab5d','#238b45','#005824']);
+
+// 3. draw cells -------------------------------------------------------------
+svg.append('g')
+    .attr('transform',`translate(${padX},${padY})`)
+  .selectAll('rect')
+  .data(days)
+  .join('rect')
+    .attr('class','day')
+    .attr('width',cell).attr('height',cell)
+    .attr('x',d=>utcSunday.count(start,d)*cell)
+    .attr('y',d=>d.getUTCDay()*cell)
+    .attr('fill',d=>color(counts[fmt(d)]||0))
+    .on('mousemove',(e,d)=>{
+        tip.style('opacity',1)
+           .style('left',e.pageX+10+'px')
+           .style('top', e.pageY+10+'px')
+           .text(`${fmt(d)} : ${counts[fmt(d)]||0}`);
+    })
+    .on('mouseleave',()=>tip.style('opacity',0));
+
+// 4. helpers ----------------------------------------------------------------
+function fmt(d){ return timeFormat('%Y-%m-%d')(d); }
 </script>
