@@ -1,71 +1,89 @@
-<!DOCTYPE html><meta charset="utf-8">
-<title>🏆 100-Hard Challenge — Heat-map</title>
+<!-- index.html  (place at repo root) -->
+<!DOCTYPE html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>100-Hard Challenge — Habit Heat-map</title>
 <style>
-  body{font-family:system-ui,Helvetica,Arial,sans-serif;padding:2rem}
-  h1{margin-top:0}
-  .day{shape-rendering:crispEdges;cursor:pointer}
-  .day:hover{stroke:#000;stroke-width:.5}
-  .tooltip{
-    position:fixed;pointer-events:none;background:#333;color:#fff;
-    padding:.25rem .5rem;border-radius:.25rem;font-size:.8rem;opacity:0;
-    transition:opacity .15s
-  }
+:root{
+  --s:clamp(10px,3vw,18px);      /* square size */
+  --gap:.5px;                    /* gap between squares */
+  --empty:#e5e5e5;
+  --done:#00d26a;
+  --border:1px solid #fff;
+  --font:"SF Pro Display",-apple-system,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+body{font:400 16px/1.4 var(--font);background:#fff;color:#000;padding:1.25rem}
+h1{font-size:clamp(1.5rem,4vw,2rem);margin-bottom:1rem;font-weight:700}
+h3{display:flex;align-items:center;gap:.5rem;font-size:clamp(.9rem,1.1rem,3vw);margin:1.5rem 0 .5rem;font-weight:600}
+legend{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:#555;margin:.25rem 0 1rem}
+legend .box{width:var(--s);height:var(--s);border:var(--border);background:var(--empty)}
+.year-nav{display:flex;justify-content:center;align-items:center;gap:.75rem;font-size:.9rem;margin-bottom:1rem}
+.year-btn{background:none;border:none;font-size:1.4rem;cursor:not-allowed;color:#ccc}
+.map{display:grid;grid-template-columns:repeat(53,calc(var(--s) + var(--gap)));grid-auto-rows:var(--s);gap:var(--gap)}
+.day{width:var(--s);height:var(--s);background:var(--empty);border:var(--border)}
+.day.done{background:var(--done)}
+@media (hover:hover){.day:hover{outline:1px solid #999}}
 </style>
+
+<body>
 <h1>🏆 100-Hard Challenge — Habit Heat-map</h1>
-<svg id=chart width=740 height=110></svg>
-<div id=tip class=tooltip></div>
-<script type=module>
-import {scaleQuantize,select,utcSunday,utcDays,timeFormat} 
-  from 'https://cdn.skypack.dev/d3@7';
 
-const DATA_URL =
-  'https://gist.githubusercontent.com/lucaschatham/ca0dda9d6b6d7497a1b03e17d6b72524/raw/streaks_data.json';
+<legend>
+  <span class="box"></span> Incomplete  
+  <span class="box" style="background:var(--done)"></span> Complete
+</legend>
 
-const svg   = select('#chart'),
-      tip   = select('#tip'),
-      year  = new Date().getUTCFullYear(),
-      start = utcSunday.floor(new Date(Date.UTC(year,0,1))),
-      days  = utcDays(start, new Date(Date.UTC(year+1,0,1)));
+<div class="year-nav">
+  <button class="year-btn" id="prev" disabled>‹</button>
+  <strong id="yearLabel"></strong>
+  <button class="year-btn" id="next" disabled>›</button>
+</div>
 
-const cell   = 12,     // square size
-      padX   = 20,
-      padY   = 20;
+<div id="maps">Loading…</div>
 
-svg.attr('viewBox',[0,0, padX+53*cell, padY+7*cell]);
+<script>
+const DATA_URL='https://gist.githubusercontent.com/lucaschatham/ca0dda9d6b6d7497a1b03e17d6b72524/raw/streaks_data.json';
+const PT_ZONE='America/Los_Angeles';
 
-// 1. fetch data -------------------------------------------------------------
-const raw = await fetch(DATA_URL).then(r=>r.json());
-// flatten into {"YYYY-MM-DD": count, ...}
-const counts = {};
-for(const [habit,dates] of Object.entries(raw)){
-  for(const d of dates) counts[d] = (counts[d]||0)+1;
+const yearEl=document.getElementById('yearLabel'), maps=document.getElementById('maps');
+let year=(new Date()).getFullYear(); yearEl.textContent=year;
+
+function toPST(iso){
+  const [Y,M,D]=iso.split('-');                // treat source as local date
+  const noonUTC=Date.UTC(+Y,+M-1,+D,12);       // 12:00 UTC avoids DST edge
+  const pst=new Date(new Intl.DateTimeFormat('en-US',{timeZone:PT_ZONE}).format(noonUTC));
+  pst.setHours(0,0,0,0);                       // midnight PST
+  return pst.toISOString().slice(0,10);        // back to YYYY-MM-DD
+}
+function isLeap(y){return (y%4===0&&y%100!==0)||y%400===0}
+
+function render(db){
+  maps.innerHTML='';
+  const daysInYear=365+isLeap(year);
+  for(const [habit,dates] of Object.entries(db)){
+    const sec=document.createElement('section');
+    sec.innerHTML=`<h3>${habit}</h3>`;
+    const grid=document.createElement('div'); grid.className='map';
+    // build blank year
+    for(let i=0;i<daysInYear;i++){
+      const div=document.createElement('div'); div.className='day';
+      const d=new Date(year,0,1+i).toISOString().slice(0,10);
+      if(dates.includes(d)) div.classList.add('done');
+      grid.appendChild(div);
+    }
+    sec.appendChild(grid); maps.appendChild(sec);
+  }
 }
 
-// 2. colour scale -----------------------------------------------------------
-const max   = Math.max(1, ...Object.values(counts));
-const color = scaleQuantize()
-  .domain([0,max])
-  .range(['#eef2f3','#c7e9c0','#7fc97f','#41ab5d','#238b45','#005824']);
-
-// 3. draw cells -------------------------------------------------------------
-svg.append('g')
-    .attr('transform',`translate(${padX},${padY})`)
-  .selectAll('rect')
-  .data(days)
-  .join('rect')
-    .attr('class','day')
-    .attr('width',cell).attr('height',cell)
-    .attr('x',d=>utcSunday.count(start,d)*cell)
-    .attr('y',d=>d.getUTCDay()*cell)
-    .attr('fill',d=>color(counts[fmt(d)]||0))
-    .on('mousemove',(e,d)=>{
-        tip.style('opacity',1)
-           .style('left',e.pageX+10+'px')
-           .style('top', e.pageY+10+'px')
-           .text(`${fmt(d)} : ${counts[fmt(d)]||0}`);
-    })
-    .on('mouseleave',()=>tip.style('opacity',0));
-
-// 4. helpers ----------------------------------------------------------------
-function fmt(d){ return timeFormat('%Y-%m-%d')(d); }
+fetch(DATA_URL,{headers:{'Cache-Control':'max-age=0'}})
+  .then(r=>r.json())
+  .then(raw=>{
+     const fixed={};
+     for(const [h,arr] of Object.entries(raw)){
+       fixed[h]=[...new Set(arr.map(toPST))];      // PST-normalised, deduped
+     }
+     render(fixed);
+  })
+  .catch(e=>{maps.textContent='⚠️ '+e});
 </script>
+</body>
