@@ -1,24 +1,31 @@
 name: update-heatmap
+
 on:
-  schedule:
-    - cron:  '25 0 * * *'   # 00:25 UTC daily
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'data/streaks_data.json'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install deps
         run: pip install pandas matplotlib seaborn
+
       - name: Generate heat-map
         run: python generate_heatmap.py
-      - name: Commit & push
+        working-directory: ${{ github.workspace }}
+
+      - name: Commit & push PNG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PUSH_TOKEN }}
         run: |
           git config --global user.email "bot@users.noreply.github.com"
           git config --global user.name  "Heatmap Bot"
           git add site/heatmap.png
-          git commit -m "auto: update heatmap" || echo "no changes"
+          git commit -m "auto: update heat-map" || echo "No changes to commit"
           git push
-      - name: Deploy to Pages
-        uses: actions/deploy-pages@v4
