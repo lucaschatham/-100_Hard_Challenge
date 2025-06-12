@@ -1,89 +1,133 @@
 <!-- index.html  (place at repo root) -->
 <!DOCTYPE html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+
 <title>100-Hard Challenge — Habit Heat-map</title>
+
+<!-- ───── 1.  DESIGN TOKENS (GitHub palette) ──────────────────────────────── -->
 <style>
 :root{
-  --s:clamp(10px,3vw,18px);      /* square size */
-  --gap:.5px;                    /* gap between squares */
-  --empty:#e5e5e5;
-  --done:#00d26a;
-  --border:1px solid #fff;
-  --font:"SF Pro Display",-apple-system,Helvetica,Arial,sans-serif;
+  --font:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --bg:#ffffff;          --grid:#ebedf0;         --done:#26a641;
+  --text:#24292f;        --muted:#586069;        --border:#ffffff;
+  --square:clamp(9px,3vw,14px);
+  --gap:2px;
 }
-*{box-sizing:border-box;margin:0}
-body{font:400 16px/1.4 var(--font);background:#fff;color:#000;padding:1.25rem}
-h1{font-size:clamp(1.5rem,4vw,2rem);margin-bottom:1rem;font-weight:700}
-h3{display:flex;align-items:center;gap:.5rem;font-size:clamp(.9rem,1.1rem,3vw);margin:1.5rem 0 .5rem;font-weight:600}
-legend{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:#555;margin:.25rem 0 1rem}
-legend .box{width:var(--s);height:var(--s);border:var(--border);background:var(--empty)}
-.year-nav{display:flex;justify-content:center;align-items:center;gap:.75rem;font-size:.9rem;margin-bottom:1rem}
-.year-btn{background:none;border:none;font-size:1.4rem;cursor:not-allowed;color:#ccc}
-.map{display:grid;grid-template-columns:repeat(53,calc(var(--s) + var(--gap)));grid-auto-rows:var(--s);gap:var(--gap)}
-.day{width:var(--s);height:var(--s);background:var(--empty);border:var(--border)}
+.dark{
+  --bg:#0d1117;          --grid:#21262d;         --done:#39d353;
+  --text:#c9d1d9;        --muted:#8b949e;        --border:#0d1117;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:400 14px/1.4 var(--font);padding:24px}
+h1{font-size:20px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:6px}
+.controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:13px}
+.toggle{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px}
+.toggle:focus{outline:2px solid var(--muted);outline-offset:2px}
+.legend{display:flex;gap:8px;font-size:12px;color:var(--muted);align-items:center;margin-bottom:8px}
+.legend .box{width:var(--square);height:var(--square);background:var(--grid);border:1px solid var(--border)}
+.legend .done{background:var(--done)}
+.habit{margin-top:20px}
+.habit h3{font-size:12px;font-weight:600;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.habit small{font-weight:400;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(53,calc(var(--square) + var(--gap)));grid-auto-rows:var(--square);gap:var(--gap)}
+.day{width:var(--square);height:var(--square);background:var(--grid);border:1px solid var(--border);border-radius:2px}
 .day.done{background:var(--done)}
-@media (hover:hover){.day:hover{outline:1px solid #999}}
+@media(hover:hover){.day:hover{outline:1px solid var(--muted)}}
+
+/* week-view hides all but last 52 cells */
+.week .day[data-hide="true"]{display:none}
 </style>
 
 <body>
 <h1>🏆 100-Hard Challenge — Habit Heat-map</h1>
 
-<legend>
-  <span class="box"></span> Incomplete  
-  <span class="box" style="background:var(--done)"></span> Complete
-</legend>
+<div class="controls">
+  <button id="themeBtn" class="toggle" title="Toggle dark / light mode">🌙</button>
+  <button id="rangeBtn" class="toggle" title="Toggle year / week view">📅 Week</button>
+</div>
 
-<div class="year-nav">
-  <button class="year-btn" id="prev" disabled>‹</button>
-  <strong id="yearLabel"></strong>
-  <button class="year-btn" id="next" disabled>›</button>
+<div class="legend">
+  <span class="box"></span> Incomplete
+  <span class="box done"></span> Complete
 </div>
 
 <div id="maps">Loading…</div>
 
 <script>
+/* ───── 2.  CONSTANTS ─────────────────────────────────────────────────────── */
 const DATA_URL='https://gist.githubusercontent.com/lucaschatham/ca0dda9d6b6d7497a1b03e17d6b72524/raw/streaks_data.json';
-const PT_ZONE='America/Los_Angeles';
+const PT='America/Los_Angeles';
+const maps=document.getElementById('maps');
+let weekView=false;
 
-const yearEl=document.getElementById('yearLabel'), maps=document.getElementById('maps');
-let year=(new Date()).getFullYear(); yearEl.textContent=year;
+/* ───── 3. UTILS ──────────────────────────────────────────────────────────── */
+const toPST=d=>{
+  const [Y,M,D]=d.split('-');
+  const noonUTC=Date.UTC(+Y,+M-1,+D,12);
+  const pstDate=new Date(new Intl.DateTimeFormat('en-US',{timeZone:PT}).format(noonUTC));
+  pstDate.setHours(0,0,0,0);
+  return pstDate.toISOString().slice(0,10);
+};
+const thisYear=(new Date()).toISOString().slice(0,4);
+const dayIndex=(dateStr)=>{
+  const d=new Date(dateStr); const start=new Date(d.getFullYear(),0,1);
+  const diff=(d-start)/(1000*60*60*24);
+  return diff;                           // 0-based index into 365/366 array
+};
 
-function toPST(iso){
-  const [Y,M,D]=iso.split('-');                // treat source as local date
-  const noonUTC=Date.UTC(+Y,+M-1,+D,12);       // 12:00 UTC avoids DST edge
-  const pst=new Date(new Intl.DateTimeFormat('en-US',{timeZone:PT_ZONE}).format(noonUTC));
-  pst.setHours(0,0,0,0);                       // midnight PST
-  return pst.toISOString().slice(0,10);        // back to YYYY-MM-DD
-}
-function isLeap(y){return (y%4===0&&y%100!==0)||y%400===0}
-
+/* ───── 4. RENDER ─────────────────────────────────────────────────────────── */
 function render(db){
-  maps.innerHTML='';
-  const daysInYear=365+isLeap(year);
+  maps.textContent='';
   for(const [habit,dates] of Object.entries(db)){
-    const sec=document.createElement('section');
-    sec.innerHTML=`<h3>${habit}</h3>`;
-    const grid=document.createElement('div'); grid.className='map';
-    // build blank year
-    for(let i=0;i<daysInYear;i++){
+    const sec=document.createElement('section'); sec.className='habit';
+    const streakLen=computeStreak(dates);
+    const pct=Math.round((dates.filter(d=>d.startsWith(thisYear)).length/
+               ( (new Date()).getDay()+1))*100)||0;
+    sec.innerHTML=`<h3>${habit}<small>🔥 ${streakLen} | ${pct}%</small></h3>`;
+    const grid=document.createElement('div'); grid.className='grid';
+    const total=isLeap(+thisYear)?366:365;
+    for(let i=0;i<total;i++){
       const div=document.createElement('div'); div.className='day';
-      const d=new Date(year,0,1+i).toISOString().slice(0,10);
-      if(dates.includes(d)) div.classList.add('done');
+      const day=new Date(thisYear,0,1+i).toISOString().slice(0,10);
+      if(dates.includes(day)) div.classList.add('done');
+      if(weekView && i<total-52) div.dataset.hide="true";
       grid.appendChild(div);
     }
     sec.appendChild(grid); maps.appendChild(sec);
   }
 }
+function computeStreak(arr){
+  const set=new Set(arr); let streak=0;
+  for(let d=new Date();;d.setDate(d.getDate()-1)){
+    const iso=d.toISOString().slice(0,10);
+    if(set.has(iso)) streak++; else break;
+  }
+  return streak;
+}
+function isLeap(y){return (y%4===0&&y%100!==0)||y%400===0}
 
+/* ───── 5. FETCH & INITIAL DRAW ───────────────────────────────────────────── */
 fetch(DATA_URL,{headers:{'Cache-Control':'max-age=0'}})
   .then(r=>r.json())
   .then(raw=>{
      const fixed={};
      for(const [h,arr] of Object.entries(raw)){
-       fixed[h]=[...new Set(arr.map(toPST))];      // PST-normalised, deduped
+       fixed[h]=[...new Set(arr.map(toPST))];
      }
+     window._db=fixed;                 // stash for toggles
      render(fixed);
   })
   .catch(e=>{maps.textContent='⚠️ '+e});
+
+/* ───── 6.  INTERACTIONS  ─────────────────────────────────────────────────── */
+document.getElementById('themeBtn').onclick=()=>{
+  document.body.classList.toggle('dark');
+  themeBtn.textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+};
+document.getElementById('rangeBtn').onclick=()=>{
+  weekView=!weekView;
+  rangeBtn.textContent=weekView?'📅 Year':'📅 Week';
+  render(window._db);
+};
 </script>
 </body>
